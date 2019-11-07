@@ -1,0 +1,18 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Project.Models;
+using Project.Models.Domain;
+using Project.Models.Requests;
+
+namespace Project.Services
+{
+    public interface IUsersService
+    {
+        void Delete(int id);
+        List<Users> GetAll();
+        Users GetById(int id);
+        Paged<Users> GetByPagination(int PageIndex, int PageSize);
+        int Insert(UsersAddRequest model);
+        void Update(UsersUpdateRequest model);
+    }
+}
