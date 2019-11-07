@@ -1,0 +1,169 @@
+using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Project.Models;
+using Project.Models.Domain;
+using Project.Models.Requests;
+using Project.Services;
+using Project.Web.Controllers;
+using Project.Web.Models.Responses;
+
+namespace Project.Web.Api.Controllers
+{
+    [Route("api/users")]
+    [ApiController]
+    public class UsersApiController : BaseApiController
+    {
+        private IUsersService _usersService = null;
+        private IAuthenticationService<int> _authService;
+
+        public UsersApiController(IUsersService usersService, IAuthenticationService<int> authService, ILogger<UsersApiController> logger) : base(logger)
+        {
+            _usersService = usersService;
+            _authService = authService;
+        }
+
+        
+
+        [HttpDelete("{id}"), AllowAnonymous]
+        public ActionResult<SuccessResponse> Delete(int id)
+        {
+
+            try
+            {
+                _usersService.Delete(id);
+                SuccessResponse response = new SuccessResponse();
+                return Ok200(response);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.ToString());
+                return StatusCode(500, new ErrorResponse(ex.Message));
+            }
+
+        }
+
+        [HttpGet, AllowAnonymous]
+        public ActionResult<ItemsResponse<Users>> Get()
+        {
+            try
+            {
+                List<Users> user = _usersService.GetAll();
+                if (user == null)
+                {
+                    return NotFound404 (new ErrorResponse("Records Not Found"));
+                }
+                else
+                {
+                    ItemsResponse<Users> response = new ItemsResponse<Users>();
+                    response.Items = user;
+                    return Ok200(response);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.ToString());
+                return StatusCode(500, new ErrorResponse(ex.Message));
+            }
+
+        }
+
+        [HttpGet("{id:int}"), AllowAnonymous]
+        public ActionResult<ItemResponse<Users>> Get(int id)
+        {
+            try
+            {
+                ItemResponse<Users> response = new ItemResponse<Users>();
+                response.Item = _usersService.GetById(id);
+
+                if (response.Item == null)
+                {
+                    return StatusCode(404, new ErrorResponse("Record Not Found"));
+                }
+                else
+                {
+                    return Ok200(response);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.ToString());
+                return StatusCode(500, new ErrorResponse(ex.Message));
+            }
+        }
+
+        
+
+        [HttpPost("register"), AllowAnonymous]
+        public ActionResult<ItemResponse<int>> Insert(UsersAddRequest model)
+        {
+            try
+            {
+                int id = _usersService.Insert(model);
+                ItemResponse<int> response = new ItemResponse<int>();
+                response.Item = id;
+                return Created201(response);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.ToString());
+                return StatusCode(500, new ErrorResponse(ex.Message));
+            }
+        }
+
+
+
+        [HttpPut("{id:int}"), AllowAnonymous]
+        public ActionResult<SuccessResponse> Put(UsersUpdateRequest model, int id)
+        {
+            try
+            {
+                if (model.Id == id)
+                {
+                    _usersService.Update(model);
+                    SuccessResponse response = new SuccessResponse();
+                    return Ok200(response);
+                }
+                else
+                {
+                    return NotFound404 (new ErrorResponse("Bad Request: Body Id does not match Entity"));
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.ToString());
+                return StatusCode(500, new ErrorResponse(ex.Message));
+            }
+        }
+
+
+        [HttpGet("{pageIndex:int}/{pageSize:int}"), AllowAnonymous]
+        public ActionResult<ItemResponse<Paged<Users>>> Pagination(int pageIndex, int pageSize)
+        {
+            try
+            {
+                Paged<Users> paged = _usersService.GetByPagination(pageIndex, pageSize);
+                if (paged == null)
+                {
+                    return NotFound404(new ErrorResponse("Records Not Found"));
+                }
+                else
+                {
+                    ItemResponse<Paged<Users>> response = new ItemResponse<Paged<Users>>();
+                    response.Item = paged;
+                    return  Ok200(response);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.ToString());
+                return StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+            }
+
+        }
+
+
+    }
+}
