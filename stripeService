@@ -1,0 +1,127 @@
+using Project.Data;
+using Project.Data.Providers;
+using Project.Models.Domain;
+using Project.Models.Requests.StripePayment;
+using Project.Services.Interfaces;
+using Stripe;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Text;
+
+namespace Project.Services
+{
+    public class StripePaymentService : IStripePaymentService
+    {
+        private IDataProvider _dataProvider = null;
+
+        public StripePaymentService(IDataProvider dataProvider)
+        {
+            _dataProvider = dataProvider;
+        }
+
+        public List<StripeOrgAccounts> GetAcctsByEvent()
+        {
+            List<StripeOrgAccounts> list = null;
+
+            _dataProvider.ExecuteCmd("dbo.EventsContributions_SelectByType",
+                inputParamMapper: null,
+                singleRecordMapper: delegate (IDataReader reader, short set)
+                {
+                    StripeOrgAccounts model = Mapper(reader);
+
+                    if (list == null)
+                    {
+                        list = new List<StripeOrgAccounts>();
+                    }
+
+                    list.Add(model);
+                }
+            );
+            return list;
+        }
+
+        public List<StripeOrgAccounts> GetAcctsByOrganization()
+        {
+            List<StripeOrgAccounts> list = null;
+
+            _dataProvider.ExecuteCmd("dbo.PaymentAccount_SelectByOrganization",
+                inputParamMapper: null,
+                singleRecordMapper: delegate (IDataReader reader, short set)
+                {
+                    StripeOrgAccounts model = Mapper(reader);
+
+                    if (list == null)
+                    {
+                        list = new List<StripeOrgAccounts>();
+                    }
+
+                    list.Add(model);
+                }
+            );
+            return list;
+        }
+
+        public string CreateCharge(StripePaymentRequest model)
+        {
+            StripeConfiguration.SetApiKey("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+
+            var options = new ChargeCreateOptions
+            {
+                Amount = model.Amount,
+                Currency = model.Currency,
+                SourceId = model.Token,
+                TransferData = new ChargeTransferDataOptions
+                {
+                    Destination = model.Destination
+                },
+                Description = "Test Charge",
+                StatementDescriptor = "Donation Test"
+            };
+            var service = new ChargeService();
+            Charge charge = service.Create(options);
+
+            return charge.Id;
+        }
+
+        public int Insert (StripePaymentRequest model)
+        {
+            int id = 0;
+
+            _dataProvider.ExecuteNonQuery(
+                "dbo.StripeTransferData_Insert",
+                inputParamMapper: delegate (SqlParameterCollection paramCol)
+                {
+                    paramCol.AddWithValue("@Amount", model.Amount);
+                    paramCol.AddWithValue("@DestinationAccountId", model.Destination);
+
+                    //Output param
+                    SqlParameter parm = new SqlParameter();
+                    parm.ParameterName = "@Id";
+                    parm.SqlDbType = SqlDbType.Int;
+                    parm.Direction = ParameterDirection.Output;
+                    paramCol.Add(parm);
+                },
+                returnParameters: delegate (SqlParameterCollection paramCol)
+                {
+                    Int32.TryParse(paramCol["@Id"].Value.ToString(), out id);
+                }
+                );
+            return id;
+        }
+
+        public StripeOrgAccounts Mapper(IDataReader reader)
+        {
+            StripeOrgAccounts model = new StripeOrgAccounts();
+            int index = 0;
+
+            model.Name = reader.GetSafeString(index++);
+            model.OrganizationId = reader.GetSafeInt32(index++);
+            model.OrgAccountId = reader.GetSafeString(index++);
+
+            return model;
+        }
+
+    }
+}
