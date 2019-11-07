@@ -1,0 +1,120 @@
+using Project.Data.Providers;
+using Project.Models;
+using Project.Models.Domain;
+using Project.Models.Requests;
+using Project.Models.Requests.Emails;
+using SendGrid;
+using SendGrid.Helpers.Mail;
+using System;
+using System.IO;
+using System.Net;
+using System.Threading.Tasks;
+
+namespace Project.Services
+{
+    public class EmailService : IEmailService
+    {
+        private IDataProvider _dataProvider = null;
+
+        public EmailService(IDataProvider dataProvider)
+        {
+            _dataProvider = dataProvider;
+        }
+
+        private async Task SendEmail(SendGridMessage msg)
+        {
+            var apiKey = //enter your api key here
+            var client = new SendGridClient(apiKey);
+            await client.SendEmailAsync(msg);
+        }
+
+        public async Task InviteMember(InviteMember model)
+        {
+
+            string directory = Directory.GetCurrentDirectory();
+            string path = Path.Combine(directory, "EmailTemplates\\InviteMembers.html");
+            var htmlContent = System.IO.File.ReadAllText(path);
+            htmlContent = htmlContent.Replace("{&To}", model.To);
+            htmlContent = htmlContent.Replace("{&FirstName}", model.FirstName);
+            htmlContent = htmlContent.Replace("{&LastName}", model.LastName);
+            htmlContent = htmlContent.Replace("{&OrganizationName}", model.OrganizationName);
+            htmlContent = htmlContent.Replace("{&Url}", "https://localhost:3000/confirm/organization/invite?" + model.Token);
+            var msg = new SendGridMessage()
+            {
+                From = new EmailAddress("ADDI@addi.com"),
+                Subject = "You've been invited!",
+                HtmlContent = htmlContent,
+            };
+            msg.AddTo(model.To);
+            await SendEmail(msg);
+        }
+
+        public async Task ResetPasswordEmail(UserProfile model, string token)
+        {
+            string directory = Directory.GetCurrentDirectory();
+            string path = Path.Combine(directory, "EmailTemplates\\ResetPassword.html");
+            var htmlContent = System.IO.File.ReadAllText(path);
+            htmlContent = htmlContent.Replace("{&To}", model.Email);
+            htmlContent = htmlContent.Replace("{&FirstName}", model.FirstName);
+            htmlContent = htmlContent.Replace("{&LastName}", model.LastName);
+            htmlContent = htmlContent.Replace("{&Url}", "https://localhost:3000/resetPassword?" + token);
+            var msg = new SendGridMessage()
+            {
+                From = new EmailAddress("ADDI@addi.com"),
+                Subject = "Reset your password!",
+                HtmlContent = htmlContent,
+            };
+            msg.AddTo(model.Email);
+            await SendEmail(msg);
+        }
+
+        public async Task ProcessRequest(string email, string token)
+        {
+            //string path = Path.Combine(_env.ContentRootPath, "EmailTemplates\\ConfirmEmail.html");
+            string directory = Directory.GetCurrentDirectory();
+            string path = Path.Combine(directory, "EmailTemplates\\ConfirmEmail.html");
+            var plainTextContent = "Please confirm you email address by clicking the following link https://localhost:3000/confirm?validate:" + token;
+            var htmlContent = System.IO.File.ReadAllText(path);
+            htmlContent = htmlContent.Replace("{&To}", email);
+            htmlContent = htmlContent.Replace("{&Url}", "https://localhost:3000/confirm?validate:" + token);
+            var msg = new SendGridMessage()
+            {
+
+                From = new EmailAddress("ADDI@addi.com"),
+                Subject = "Confirm your email address",
+                HtmlContent = htmlContent,
+
+            };
+            msg.AddTo(email);
+            await SendEmail(msg);
+
+        }
+
+
+        public async Task InviteContributor(InviteContributorRequest model)
+
+
+        {
+            string directory = Directory.GetCurrentDirectory();
+            var path = Path.Combine(directory, "EmailTemplates\\InviteContributors.html");
+            var htmlContent = System.IO.File.ReadAllText(path);
+            htmlContent = htmlContent.Replace("{&To}", model.To);
+            htmlContent = htmlContent.Replace("{&FirstName}", model.FirstName);
+            htmlContent = htmlContent.Replace("{&LastName}", model.LastName);
+            htmlContent = htmlContent.Replace("{&ContributorType}", model.ContributionType);
+            htmlContent = htmlContent.Replace("{&Url}", " https://localhost:3000/confirmeventinvite?:" + model.Token);
+
+            var msg = new SendGridMessage()
+            {
+
+                From = new EmailAddress("ADDI@addi.com"),
+                Subject = "You've been invited!",
+                HtmlContent = htmlContent,
+            };
+            msg.AddTo(model.To, model.FirstName);
+            await SendEmail(msg);
+        }
+
+    }
+
+}
