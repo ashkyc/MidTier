@@ -1,0 +1,194 @@
+using Project.Data.Providers;
+using Project.Models.Requests;
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Text;
+using System.Data;
+using Project.Models.Domain;
+using Project.Data;
+using Project.Models;
+using System.Threading.Tasks;
+using System.Linq;
+using System.Security.Claims;
+using Project.Models.Interfaces;
+
+namespace Project.Services
+{
+    public class UsersService : IUsersService
+    {
+        private IDataProvider _dataProvider = null;
+
+        public UsersService (IDataProvider dataProvider)
+        {
+            _dataProvider = dataProvider;
+        }
+
+        public int Insert(UsersAddRequest model)
+        {
+            int Id = 0;
+            string password = model.Password;
+            string salt = BCrypt.BCryptHelper.GenerateSalt();
+            string HashedPassword = BCrypt.BCryptHelper.HashPassword(password, salt);
+
+            _dataProvider.ExecuteNonQuery(
+                "dbo.Users_Insert",
+                inputParamMapper: delegate (SqlParameterCollection paramCol)
+                {
+                    paramCol.AddWithValue("@userFirstName", model.FirstName);
+                    paramCol.AddWithValue("@userLastName", model.LastName);
+                    paramCol.AddWithValue("@userEmail", model.Email);
+                    paramCol.AddWithValue("@password", HashedPassword);
+                    paramCol.AddWithValue("@isConfirmed", model.IsConfirmed);
+                    paramCol.AddWithValue("@userName", model.UserName);
+
+                    //Output param
+                    SqlParameter parm = new SqlParameter();
+                    parm.ParameterName = "@Id";
+                    parm.SqlDbType = SqlDbType.Int;
+                    parm.Direction = ParameterDirection.Output;
+                    paramCol.Add(parm);
+
+
+                },
+                returnParameters: delegate (SqlParameterCollection paramCol)
+                {
+                    Int32.TryParse(paramCol["@Id"].Value.ToString(), out Id);
+                }
+
+                );
+
+            return Id;
+        }
+
+        public List<Users> GetAll()
+        {
+            List<Users> result = new List<Users>();
+            _dataProvider.ExecuteCmd(
+                "dbo.Users_SelectAll",
+                inputParamMapper: null,
+                singleRecordMapper: delegate (IDataReader reader, short set)
+                {
+                    Users model = Mapper(reader);
+
+                    result.Add(model);
+                }
+                );
+
+            return result;
+        }
+
+        public void Update(UsersUpdateRequest model)
+        {
+            _dataProvider.ExecuteNonQuery(
+                "dbo.Users_Update",
+                inputParamMapper: delegate (SqlParameterCollection paramCol)
+                {
+                    paramCol.AddWithValue("@id", model.Id);
+                    paramCol.AddWithValue("@userFirstName", model.FirstName);
+                    paramCol.AddWithValue("@userLastName", model.LastName);
+                    paramCol.AddWithValue("@userEmail", model.Email);
+                    paramCol.AddWithValue("@password", model.Password);
+                    paramCol.AddWithValue("@isConfirmed", model.IsConfirmed);
+                    paramCol.AddWithValue("@dateModified", model.DateModified);
+                    paramCol.AddWithValue("@userName", model.UserName);
+                }
+                );
+        }
+
+        public void Delete (int id)
+        {
+            _dataProvider.ExecuteNonQuery(
+                "dbo.Users_DeleteById",
+                inputParamMapper: delegate (SqlParameterCollection paramCol)
+                {
+                    paramCol.AddWithValue("@id", id);
+                }
+                );
+        }
+
+        public Users GetById(int id)
+        {
+            Users model = null;
+            _dataProvider.ExecuteCmd(
+                "dbo.Users_SelectById",
+                inputParamMapper: delegate (SqlParameterCollection paramCol)
+                {
+                    paramCol.AddWithValue("@id", id);
+                },
+                singleRecordMapper: delegate (IDataReader reader, short set)
+                {
+                    model = Mapper(reader);
+                }
+                );
+            return model;
+        }
+
+        
+
+        public Paged<Users> GetByPagination(int PageIndex, int PageSize)
+        {
+
+            Paged<Users> pagedResult = null;
+
+            List<Users> result = null;
+
+            int TotalCount = 0;
+
+            _dataProvider.ExecuteCmd(
+                "dbo.Users_SelectAllByPagination",
+                inputParamMapper: delegate (SqlParameterCollection paramCol)
+                {
+                    paramCol.AddWithValue("@pageIndex", PageIndex);
+                    paramCol.AddWithValue("@pageSize", PageSize);
+                },
+                singleRecordMapper: delegate (IDataReader reader, short set)
+                {
+                    Users model = new Users();
+                    int index = 0;
+                    model.Id = reader.GetSafeInt32(index++);
+                    model.FirstName = reader.GetSafeString(index++);
+                    model.LastName = reader.GetSafeString(index++);
+                    model.Email = reader.GetSafeString(index++);
+                    model.Password = reader.GetSafeString(index++);
+                    model.DateCreated = reader.GetSafeDateTime(index++);
+                    model.DateModified = reader.GetSafeDateTime(index++);
+                    model.UserName = reader.GetSafeString(index++);
+                    TotalCount = reader.GetSafeInt32(index++);
+
+                    if (result == null)
+                    {
+                        result = new List<Users>();
+                    }
+                    result.Add(model);
+                }
+
+                );
+            if (result != null)
+            {
+                pagedResult = new Paged<Users>(result, PageIndex, PageSize, TotalCount);
+            }
+            return pagedResult;
+        }
+
+
+        private Users Mapper(IDataReader reader)
+        {
+            Users model = new Users();
+            int index = 0;
+            model.Id = reader.GetSafeInt32(index++);
+            model.FirstName = reader.GetSafeString(index++);
+            model.LastName = reader.GetSafeString(index++);
+            model.Email = reader.GetSafeString(index++);
+            model.Password = reader.GetSafeString(index++);
+            //model.IsConfirmed = reader.GetSafeBool(index++);
+            model.DateCreated = reader.GetSafeDateTime(index++);
+            model.DateModified = reader.GetSafeDateTime(index++);
+            model.UserName = reader.GetSafeString(index++);
+            //model.Salt = reader.GetSafeString(index++);
+            return model;
+        }
+
+    }
+
+}
