@@ -1,0 +1,123 @@
+using Amazon;
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Transfer;
+using Project.Data.Providers;
+using Project.Model.Requests;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using System.Data.SqlClient;
+using System.Data;
+using System.Linq;
+using Project.Data;
+using Project.Model.Domain;
+
+namespace Project.Services
+{
+    public class AWSS3Service : IFileUploadService
+    {
+        private IDataProvider _dataProvider = null;
+
+        public AWSS3Service(IDataProvider dataProvider)
+        {
+            _dataProvider = dataProvider;
+        }
+        public async Task<FileUpdateRequest> Upload(IFormFile file, string accessKey, string secret, string bucketName)
+        {
+            BasicAWSCredentials credentials = new BasicAWSCredentials(accessKey, secret);
+            AmazonS3Client s3Client = new AmazonS3Client(credentials, RegionEndpoint.USWest2);
+            TransferUtility fileTransferUtility = new TransferUtility(s3Client);
+            FileUpdateRequest result = null;
+            if (file.Length > 0)
+            {
+                result = new FileUpdateRequest();
+
+                var filePath = Path.GetTempFileName();
+                Guid guid = Guid.NewGuid();
+
+                result.FileName = file.FileName;
+                string keyName = "sabio-training" + guid + "_" + file.FileName;
+                result.FileType = Path.GetExtension(keyName).Remove(0, 1);
+                using (FileStream stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                    fileTransferUtility.Upload(stream, bucketName, keyName);
+
+                }
+                result.Url = "https://Project123.s3-us-west-2.amazonaws.com/" + keyName;
+            }
+            return result;
+        }
+
+        public PupImageUpdateRequest Insert(PupImageAddRequest model)
+        {
+            PupImageUpdateRequest fileoutput = null;
+            _dataProvider.ExecuteCmd(
+                "dbo.PupImages_Insert",
+                inputParamMapper: delegate (SqlParameterCollection parameterCollection)
+                {
+                    SqlParameter parameter = new SqlParameter();
+                    parameter.ParameterName = "@Id";
+                    parameter.SqlDbType = SqlDbType.Int;
+                    parameter.Direction = ParameterDirection.Output;
+                    parameterCollection.Add(parameter);
+
+                    parameterCollection.AddWithValue("@Url", model.Url);
+                    parameterCollection.AddWithValue("@PupId", model.PupId);
+                    parameterCollection.AddWithValue("@CreatedBy", model.CreatedBy);
+                    
+                },
+                 singleRecordMapper: delegate (IDataReader reader, short set)
+                 {
+                     fileoutput = FileMapper(reader);
+                 }
+                );
+            return fileoutput;
+        }
+
+        public PupImageUpdateRequest Update(int id, string s3Url, int pupId, int userId)
+        {
+            PupImageUpdateRequest request = null;
+            _dataProvider.ExecuteCmd(
+                "dbo.PupImages_Update",
+                inputParamMapper: delegate (SqlParameterCollection parameterCollection)
+                {
+                    SqlParameter parameter = new SqlParameter();
+                    parameter.ParameterName = "@Id";
+                    parameter.SqlDbType = SqlDbType.Int;
+                    parameter.Direction = ParameterDirection.Output;
+                    parameterCollection.Add(parameter);
+
+                    parameterCollection.AddWithValue("@Id", id);
+                    parameterCollection.AddWithValue("@Url", s3Url);
+                    parameterCollection.AddWithValue("@PupId", pupId);
+                    parameterCollection.AddWithValue("@CreatedBy", userId);
+
+                },
+                singleRecordMapper: delegate (IDataReader reader, short set)
+                {
+                    request = FileMapper(reader);
+                }
+                );
+            return request;
+        }
+
+        private PupImageUpdateRequest FileMapper(IDataReader reader)
+        {
+            PupImageUpdateRequest model = new PupImageUpdateRequest();
+            int index = 0;
+
+            model.Id = reader.GetSafeInt32(index++);
+            model.Url = reader.GetSafeString(index++);
+            model.PupId = reader.GetSafeInt32(index++);
+            model.CreatedBy = reader.GetSafeInt32(index++);
+            model.DateCreated = reader.GetSafeDateTime(index++);
+
+            return model;
+        }
+    }
+}
